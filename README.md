@@ -46,6 +46,7 @@ This plugin is included in iOS and Android versions of the [PhoneGap Developer A
 
 Note that this plugin's id changed from `com.megster.cordova.ble` to `cordova-plugin-ble-central` as part of the migration from the [Cordova plugin repo](http://plugins.cordova.io/) to [npm](https://www.npmjs.com/).
 
+# BAW - test
 # API
 
 ## Methods
@@ -716,7 +717,7 @@ Add a new section to config.xml
             </array>
         </config-file>
     </platform>
-    
+
 # Testing the Plugin
 
 Tests require the [Cordova Plugin Test Framework](https://github.com/apache/cordova-plugin-test-framework)
