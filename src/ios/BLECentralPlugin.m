@@ -15,6 +15,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+// MODS BY BAW
 
 #import "BLECentralPlugin.h"
 #import <Cordova/CDV.h>
@@ -55,7 +56,9 @@
                        @"off", @(CBCentralManagerStatePoweredOff),
                        @"on", @(CBCentralManagerStatePoweredOn),
                        nil];
-    readRSSICallbacks = [NSMutableDictionary new];
+	readRSSICallbacks = [NSMutableDictionary new];
+    id discoveryDelayString = [self.commandDelegate.settings objectForKey: [@"BleCentralServiceDiscoveryDelay" lowercaseString]];
+    serviceDiscoveryDelay = discoveryDelayString == nil ? 0 : [discoveryDelayString floatValue];
 }
 
 #pragma mark - Cordova Plugin Methods
@@ -351,10 +354,15 @@
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
+
 - (void)onReset {
     stateCallbackId = nil;
+    for (CBPeripheral *peripheral in peripherals) {
+        if (peripheral && peripheral.state != CBPeripheralStateDisconnected) {
+            [manager cancelPeripheralConnection:peripheral];
+        }
+    }
 }
-
 - (void)readRSSI:(CDVInvokedUrlCommand*)command {
     NSLog(@"readRSSI");
     NSString *uuid = [command.arguments objectAtIndex:0];
@@ -437,7 +445,13 @@
     peripheral.delegate = self;
 
     // NOTE: it's inefficient to discover all services
-    [peripheral discoverServices:nil];
+    if (serviceDiscoveryDelay > 0) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(serviceDiscoveryDelay / 1000 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [peripheral discoverServices:nil];
+        });
+    } else {
+        [peripheral discoverServices:nil];
+    }
 
     // NOTE: not calling connect success until characteristics are discovered
 }
@@ -536,7 +550,13 @@
         NSData *data = characteristic.value; // send RAW data to Javascript
 
         CDVPluginResult *pluginResult = nil;
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArrayBuffer:data];
+        if (error) {
+            NSLog(@"%@", error);
+            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:[error localizedDescription]];
+        } else {
+            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArrayBuffer:data];
+        }
+
         [pluginResult setKeepCallbackAsBool:TRUE]; // keep for notification
         [self.commandDelegate sendPluginResult:pluginResult callbackId:notifyCallbackId];
     }
@@ -547,7 +567,12 @@
         NSData *data = characteristic.value; // send RAW data to Javascript
 
         CDVPluginResult *pluginResult = nil;
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArrayBuffer:data];
+        if (error) {
+            NSLog(@"%@", error);
+            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:[error localizedDescription]];
+        } else {
+            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArrayBuffer:data];
+        }
         [self.commandDelegate sendPluginResult:pluginResult callbackId:readCallbackId];
 
         [readCallbacks removeObjectForKey:key];

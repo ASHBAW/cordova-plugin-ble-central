@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+// MODS BY BAW
 
 package com.megster.cordova.ble.central;
 
@@ -19,6 +20,8 @@ import android.app.Activity;
 import android.bluetooth.*;
 import android.os.Build;
 import android.util.Base64;
+import android.os.Handler;
+import android.os.Looper;
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.LOG;
 import org.apache.cordova.PluginResult;
@@ -42,6 +45,7 @@ public class Peripheral extends BluetoothGattCallback {
     private BluetoothDevice device;
     private byte[] advertisingData;
     private int advertisingRSSI;
+    private int serviceDiscoveryDelay;
     private boolean connected = false;
     private ConcurrentLinkedQueue<BLECommand> commandQueue = new ConcurrentLinkedQueue<BLECommand>();
     private boolean bleProcessing;
@@ -51,14 +55,16 @@ public class Peripheral extends BluetoothGattCallback {
     private CallbackContext connectCallback;
     private CallbackContext readCallback;
     private CallbackContext writeCallback;
-
+    private final Handler handler;
     private Map<String, CallbackContext> notificationCallbacks = new HashMap<String, CallbackContext>();
 
-    public Peripheral(BluetoothDevice device, int advertisingRSSI, byte[] scanRecord) {
+    public Peripheral(Handler handler, BluetoothDevice device, int advertisingRSSI, byte[] scanRecord, int serviceDiscoveryDelay) {
 
+        this.handler = handler;
         this.device = device;
         this.advertisingRSSI = advertisingRSSI;
         this.advertisingData = scanRecord;
+        this.serviceDiscoveryDelay = serviceDiscoveryDelay;
 
     }
 
@@ -205,14 +211,25 @@ public class Peripheral extends BluetoothGattCallback {
     }
 
     @Override
-    public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+    public void onConnectionStateChange(BluetoothGatt gattClient, int status, int newState) {
 
-        this.gatt = gatt;
+        this.gatt = gattClient;
 
         if (newState == BluetoothGatt.STATE_CONNECTED) {
 
             connected = true;
-            gatt.discoverServices();
+
+            if (serviceDiscoveryDelay > 0) {
+                handler.postDelayed(new Runnable() {
+                  @Override
+                  public void run() {
+                      gatt.discoverServices();
+                  }
+                }, serviceDiscoveryDelay);
+            }
+            else {
+                gatt.discoverServices();
+            }
 
         } else {
 
@@ -322,44 +339,49 @@ public class Peripheral extends BluetoothGattCallback {
         }
 
         BluetoothGattService service = gatt.getService(serviceUUID);
-        BluetoothGattCharacteristic characteristic = findNotifyCharacteristic(service, characteristicUUID);
-        String key = generateHashKey(serviceUUID, characteristic);
 
-        if (characteristic != null) {
+        if (service == null) {
+          callbackContext.error("Service " + serviceUUID + " not found");
+        } else {
+          BluetoothGattCharacteristic characteristic = findNotifyCharacteristic(service, characteristicUUID);
+          String key = generateHashKey(serviceUUID, characteristic);
+
+          if (characteristic != null) {
 
             notificationCallbacks.put(key, callbackContext);
 
             if (gatt.setCharacteristicNotification(characteristic, true)) {
 
-                // Why doesn't setCharacteristicNotification write the descriptor?
-                BluetoothGattDescriptor descriptor = characteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIGURATION_UUID);
-                if (descriptor != null) {
+              // Why doesn't setCharacteristicNotification write the descriptor?
+              BluetoothGattDescriptor descriptor = characteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIGURATION_UUID);
+              if (descriptor != null) {
 
-                    // prefer notify over indicate
-                    if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0) {
-                        descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-                    } else if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0) {
-                        descriptor.setValue(BluetoothGattDescriptor.ENABLE_INDICATION_VALUE);
-                    } else {
-                        LOG.w(TAG, "Characteristic " + characteristicUUID + " does not have NOTIFY or INDICATE property set");
-                    }
-
-                    if (gatt.writeDescriptor(descriptor)) {
-                        success = true;
-                    } else {
-                        callbackContext.error("Failed to set client characteristic notification for " + characteristicUUID);
-                    }
-
+                // prefer notify over indicate
+                if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0) {
+                  descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                } else if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0) {
+                  descriptor.setValue(BluetoothGattDescriptor.ENABLE_INDICATION_VALUE);
                 } else {
-                    callbackContext.error("Set notification failed for " + characteristicUUID);
+                  LOG.w(TAG, "Characteristic " + characteristicUUID + " does not have NOTIFY or INDICATE property set");
                 }
 
+                if (gatt.writeDescriptor(descriptor)) {
+                  success = true;
+                } else {
+                  callbackContext.error("Failed to set client characteristic notification for " + characteristicUUID);
+                }
+
+              } else {
+                callbackContext.error("Set notification failed for " + characteristicUUID);
+              }
+
             } else {
-                callbackContext.error("Failed to register notification for " + characteristicUUID);
+              callbackContext.error("Failed to register notification for " + characteristicUUID);
             }
 
-        } else {
+          } else {
             callbackContext.error("Characteristic " + characteristicUUID + " not found");
+          }
         }
 
         if (!success) {
@@ -375,22 +397,27 @@ public class Peripheral extends BluetoothGattCallback {
         }
 
         BluetoothGattService service = gatt.getService(serviceUUID);
-        BluetoothGattCharacteristic characteristic = findNotifyCharacteristic(service, characteristicUUID);
-        String key = generateHashKey(serviceUUID, characteristic);
 
-        if (characteristic != null) {
+        if (service == null) {
+          callbackContext.error("Service " + serviceUUID + " not found");
+        } else {
+          BluetoothGattCharacteristic characteristic = findNotifyCharacteristic(service, characteristicUUID);
+          String key = generateHashKey(serviceUUID, characteristic);
+
+          if (characteristic != null) {
 
             notificationCallbacks.remove(key);
 
             if (gatt.setCharacteristicNotification(characteristic, false)) {
-                callbackContext.success();
+              callbackContext.success();
             } else {
-                // TODO we can probably ignore and return success anyway since we removed the notification callback
-                callbackContext.error("Failed to stop notification for " + characteristicUUID);
+              // TODO we can probably ignore and return success anyway since we removed the notification callback
+              callbackContext.error("Failed to stop notification for " + characteristicUUID);
             }
 
-        } else {
+          } else {
             callbackContext.error("Characteristic " + characteristicUUID + " not found");
+          }
         }
 
         commandCompleted();
@@ -440,18 +467,22 @@ public class Peripheral extends BluetoothGattCallback {
         }
 
         BluetoothGattService service = gatt.getService(serviceUUID);
-        BluetoothGattCharacteristic characteristic = findReadableCharacteristic(service, characteristicUUID);
-
-        if (characteristic == null) {
-            callbackContext.error("Characteristic " + characteristicUUID + " not found.");
+        if (service == null) {
+          callbackContext.error("Service " + serviceUUID + " not found.");
         } else {
+          BluetoothGattCharacteristic characteristic = findReadableCharacteristic(service, characteristicUUID);
+
+          if (characteristic == null) {
+            callbackContext.error("Characteristic " + characteristicUUID + " not found.");
+          } else {
             readCallback = callbackContext;
             if (gatt.readCharacteristic(characteristic)) {
-                success = true;
+              success = true;
             } else {
-                readCallback = null;
-                callbackContext.error("Read failed");
+              readCallback = null;
+              callbackContext.error("Read failed");
             }
+          }
         }
 
         if (!success) {
@@ -517,21 +548,26 @@ public class Peripheral extends BluetoothGattCallback {
         }
 
         BluetoothGattService service = gatt.getService(serviceUUID);
-        BluetoothGattCharacteristic characteristic = findWritableCharacteristic(service, characteristicUUID, writeType);
 
-        if (characteristic == null) {
-            callbackContext.error("Characteristic " + characteristicUUID + " not found.");
+        if (service == null) {
+          callbackContext.error("Service " + serviceUUID + " not found.");
         } else {
+          BluetoothGattCharacteristic characteristic = findWritableCharacteristic(service, characteristicUUID, writeType);
+
+          if (characteristic == null) {
+            callbackContext.error("Characteristic " + characteristicUUID + " not found.");
+          } else {
             characteristic.setValue(data);
             characteristic.setWriteType(writeType);
             writeCallback = callbackContext;
 
             if (gatt.writeCharacteristic(characteristic)) {
-                success = true;
+              success = true;
             } else {
-                writeCallback = null;
-                callbackContext.error("Write failed");
+              writeCallback = null;
+              callbackContext.error("Write failed");
             }
+          }
         }
 
         if (!success) {

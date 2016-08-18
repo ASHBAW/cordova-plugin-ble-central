@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+// MODS BY BAW
 
 package com.megster.cordova.ble.central;
 
@@ -34,6 +35,8 @@ import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.LOG;
 import org.apache.cordova.PermissionHelper;
 import org.apache.cordova.PluginResult;
+import org.apache.cordova.CordovaWebView;
+import org.apache.cordova.CordovaInterface;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONException;
@@ -78,6 +81,9 @@ public class BLECentralPlugin extends CordovaPlugin implements BluetoothAdapter.
     private static final String TAG = "BLEPlugin";
     private static final int REQUEST_ENABLE_BLUETOOTH = 1;
 
+    private int serviceDiscoveryDelay = 0;
+    private Handler handler;
+
     BluetoothAdapter bluetoothAdapter;
 
     // key is the MAC Address
@@ -108,8 +114,19 @@ public class BLECentralPlugin extends CordovaPlugin implements BluetoothAdapter.
         removeStateListener();
     }
 
+    @Override
     public void onReset() {
         removeStateListener();
+        for (Map.Entry<String, Peripheral> entry : peripherals.entrySet()) {
+            Peripheral peripheral = entry.getValue();
+            peripheral.disconnect();
+        }
+    }
+
+    @Override
+    public void initialize(CordovaInterface cordova, CordovaWebView webView) {
+        serviceDiscoveryDelay = preferences.getInteger("BleCentralServiceDiscoveryDelay", 0);
+        handler = new Handler();
     }
 
     @Override
@@ -468,7 +485,6 @@ public class BLECentralPlugin extends CordovaPlugin implements BluetoothAdapter.
         }
 
         if (scanSeconds > 0) {
-            Handler handler = new Handler();
             handler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
@@ -505,7 +521,7 @@ public class BLECentralPlugin extends CordovaPlugin implements BluetoothAdapter.
 
         if (!alreadyReported) {
 
-            Peripheral peripheral = new Peripheral(device, rssi, scanRecord);
+            Peripheral peripheral = new Peripheral(handler, device, rssi, scanRecord, serviceDiscoveryDelay);
             peripherals.put(device.getAddress(), peripheral);
 
             if (discoverCallback != null) {

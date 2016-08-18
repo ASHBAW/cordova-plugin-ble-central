@@ -15,6 +15,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+// MODS BY BAW
 
 #ifndef BLECentralPlugin_h
 #define BLECentralPlugin_h
@@ -33,7 +34,8 @@
     NSMutableDictionary *notificationCallbacks;
     NSMutableDictionary *stopNotificationCallbacks;
     NSMutableDictionary *connectCallbackLatches;
-    NSMutableDictionary *readRSSICallbacks;
+	  NSMutableDictionary *readRSSICallbacks;
+	  float serviceDiscoveryDelay;
 }
 
 @property (strong, nonatomic) NSMutableSet *peripherals;
