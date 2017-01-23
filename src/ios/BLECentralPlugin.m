@@ -15,7 +15,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-// MODS BY BAW
 
 #import "BLECentralPlugin.h"
 #import <Cordova/CDV.h>
@@ -198,9 +197,9 @@
 
 // stopNotification: function (device_id, service_uuid, characteristic_uuid, success, failure) {
 - (void)stopNotification:(CDVInvokedUrlCommand*)command {
-    NSLog(@"registering for notification");
+    NSLog(@"stop notification");
 
-    BLECommandContext *context = [self getData:command prop:CBCharacteristicPropertyNotify]; // TODO name this better
+    BLECommandContext *context = [self getData:command prop:CBCharacteristicPropertyNotify];
 
     if (context) {
         CBPeripheral *peripheral = [context peripheral];
@@ -354,7 +353,6 @@
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
-
 - (void)onReset {
     stateCallbackId = nil;
     for (CBPeripheral *peripheral in peripherals) {
@@ -363,6 +361,7 @@
         }
     }
 }
+
 - (void)readRSSI:(CDVInvokedUrlCommand*)command {
     NSLog(@"readRSSI");
     NSString *uuid = [command.arguments objectAtIndex:0];
