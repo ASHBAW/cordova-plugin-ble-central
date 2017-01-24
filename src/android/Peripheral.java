@@ -429,8 +429,9 @@ public class Peripheral extends BluetoothGattCallback {
                 callbackContext.error("Failed to stop notification for " + characteristicUUID);
             }
 
-        } else {
+          } else {
             callbackContext.error("Characteristic " + characteristicUUID + " not found");
+          }
         }
 
         commandCompleted();
