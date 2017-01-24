@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+// MODS BY BAW
 
 package com.megster.cordova.ble.central;
 
@@ -46,7 +47,6 @@ public class Peripheral extends BluetoothGattCallback {
     private int advertisingRSSI;
     private int serviceDiscoveryDelay;
     private boolean connected = false;
-    private boolean connecting = false;
     private ConcurrentLinkedQueue<BLECommand> commandQueue = new ConcurrentLinkedQueue<BLECommand>();
     private boolean bleProcessing;
 
@@ -70,8 +70,6 @@ public class Peripheral extends BluetoothGattCallback {
 
     public void connect(CallbackContext callbackContext, Activity activity) {
         BluetoothDevice device = getDevice();
-        connecting = true;
-
         connectCallback = callbackContext;
         if (Build.VERSION.SDK_INT < 23) {
             gatt = device.connectGatt(activity, false, this);
@@ -87,8 +85,6 @@ public class Peripheral extends BluetoothGattCallback {
     public void disconnect() {
         connectCallback = null;
         connected = false;
-        connecting = false;
-
         if (gatt != null) {
             gatt.disconnect();
             gatt.close();
@@ -195,10 +191,6 @@ public class Peripheral extends BluetoothGattCallback {
         return connected;
     }
 
-    public boolean isConnecting() {
-        return connecting;
-    }
-
     public BluetoothDevice getDevice() {
         return device;
     }
@@ -226,7 +218,6 @@ public class Peripheral extends BluetoothGattCallback {
         if (newState == BluetoothGatt.STATE_CONNECTED) {
 
             connected = true;
-			connecting = false;
 
             if (serviceDiscoveryDelay > 0) {
                 handler.postDelayed(new Runnable() {
@@ -418,15 +409,10 @@ public class Peripheral extends BluetoothGattCallback {
             notificationCallbacks.remove(key);
 
             if (gatt.setCharacteristicNotification(characteristic, false)) {
-                BluetoothGattDescriptor descriptor = characteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIGURATION_UUID);
-                if (descriptor != null) {
-                    descriptor.setValue(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE);
-                    gatt.writeDescriptor(descriptor);
-                }
-                callbackContext.success();
+              callbackContext.success();
             } else {
-                // TODO we can probably ignore and return success anyway since we removed the notification callback
-                callbackContext.error("Failed to stop notification for " + characteristicUUID);
+              // TODO we can probably ignore and return success anyway since we removed the notification callback
+              callbackContext.error("Failed to stop notification for " + characteristicUUID);
             }
 
           } else {
@@ -576,10 +562,10 @@ public class Peripheral extends BluetoothGattCallback {
             writeCallback = callbackContext;
 
             if (gatt.writeCharacteristic(characteristic)) {
-                success = true;
+              success = true;
             } else {
-                writeCallback = null;
-                callbackContext.error("Write failed");
+              writeCallback = null;
+              callbackContext.error("Write failed");
             }
           }
         }
